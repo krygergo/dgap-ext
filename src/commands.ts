@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { readdirSync } from "fs";
 
 type Command = {
     id: string,

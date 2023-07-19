@@ -14,6 +14,10 @@
   "contributes": {
     "commands": [
       {
+        "command": "dgap.install",
+        "title": "DGAP: Install"
+      },
+      {
         "command": "dgap.start",
         "title": "DGAP: Start"
       }
