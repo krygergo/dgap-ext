@@ -1,11 +1,10 @@
 import * as vscode from 'vscode';
-import commands from "./commands";
+import { createCommand } from './command';
 
-
-export function activate(context: vscode.ExtensionContext) {
-	commands(context);
+export function activate(extensionContext: vscode.ExtensionContext) {
+	createCommand(extensionContext);
 }
 
 export function deactivate() {
-	//TODO
+	
 }
