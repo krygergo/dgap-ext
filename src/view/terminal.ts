@@ -39,7 +39,7 @@ async function start(this: TerminalView) {
 }
 
 function stop(this: TerminalView) {
-    this.terminal?.dgapProcess.disconnect();
+    this.terminal?.dgapProcess.kill();
     delete this.terminal;
 }
 
@@ -49,7 +49,7 @@ async function createTerminal(terminalView: TerminalView) {
     const pty: vscode.Pseudoterminal = {
         onDidWrite: terminalView.writeEmitter.event,
         open: () => onTerminalOpen(terminalView),
-        close: terminalView.stop,
+        close: () => terminalView.stop(),
         handleInput: data => onTerminalInput(terminalView, data)
     };
     const terminal = vscode.window.createTerminal({ name, pty });
