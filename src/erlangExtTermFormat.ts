@@ -29,14 +29,14 @@ export type Atom = ErlangDataType<"atom", string>;
 export type Integer = ErlangDataType<"integer", number>;
 export type Float = ErlangDataType<"float", number>;
 export type String = ErlangDataType<"string", string>;
-export type Tuple<T extends Term[]> = ErlangDataType<"tuple", T>;
+export type Tuple<T extends [...Term[]]> = ErlangDataType<"tuple", T>;
 export type List<T extends Term[]> = ErlangDataType<"list", T>;
 export type Export = ErlangDataType<"export", [string, string, number]>;
-export type Term = Atom | Integer | Float | String | Tuple<Term[]> | List<Term[]> | Export;
+export type Term = Atom | Integer | Float | String | Tuple<[...Term[]]> | List<Term[]> | Export;
 
 export type ErlangRequest = Tuple<[String, Export, List<Term[]>]> & { ref: () => string };
 
-export type ErlangResponse = Tuple<[String, Term]>;
+export type ErlangResponse = Tuple<[String, Term]> & { ref: () => string };
 
 export function encode(data: Term) {
     const buffer = encodeErlangData(data, [Tag.Version]);
@@ -106,11 +106,9 @@ function encodeSmallIntegerExt(integer: number, buffer: number[] = []) {
 
 function encodeFloat(float: number, buffer: number[] = []) {
     buffer.push(Tag.NewFloatExt);
-    const bytes = [
-        float >> 56, float >> 48 & 0xFF, float >> 40 & 0xFF, float >> 32 & 0xFF, 
-        float >> 24 & 0xFF, float >> 16 & 0xFF, float >> 8 & 0xFF, float & 0xFF
-    ];
-    bytes.forEach(byte => buffer.push(byte));
+    const floatBuffer = Buffer.alloc(8);
+    floatBuffer.writeDoubleBE(float);
+    floatBuffer.forEach(byte => buffer.push(byte));
     return buffer;
 }
 
@@ -167,7 +165,7 @@ export function decode(data: Buffer) {
     }
     const {term, offset} = decodeErlangData(data, 1);
     if (offset !== data.length) {
-        throw new Error("Unable to deocde all data");
+        throw new Error("Unable to decode all data");
     }
     return term;
 }
@@ -205,17 +203,17 @@ function decodeErlangData(data: Buffer, offset: number): { term: Term; offset: n
             const exportExt = decodeExportExt(data, offset);
             return { term: toTerm("export", exportExt.export), offset: exportExt.offset };
         default:
-            throw new Error(`Unable to decode tag: ${data[offset]}`);
+            throw new Error(`Unable to decode tag: ${data[offset - 1]}`);
     }
 }
 
 function decodeAtomUtf8Ext(data: Buffer, offset: number) {
-    const length = bufferTo16Int(data, offset);
+    const length = data.readInt16BE(offset);
     return decodeAtomUtf8(data, offset + 2, length);
 }
 
 function decodeSmallAtomUtf8Ext(data: Buffer, offset: number) {
-    const length = bufferTo8Int(data, offset);
+    const length = data.readInt8(offset);
     return decodeAtomUtf8(data, offset + 1, length);
 }
 
@@ -225,34 +223,34 @@ function decodeAtomUtf8(data: Buffer, offset: number, length: number) {
 }
 
 function decodeIntegerExt(data: Buffer, offset: number) {
-    return { integer: bufferTo32Int(data, offset), offset: offset + 4 };
+    return { integer: data.readInt32BE(offset), offset: offset + 4 };
 }
 
 function decodeSmallIntegerExt(data: Buffer, offset: number) {
-    return { integer: bufferTo8Int(data, offset), offset: offset + 1 };
+    return { integer: data.readInt8(offset), offset: offset + 1 };
 }
 
 function decodeNewFloatExt(data: Buffer, offset: number) {
-    return { float: bufferToFloat(data, offset), offset: offset + 8 };
+    return { float: data.readDoubleBE(offset), offset: offset + 8 };
 }
 
 function decodeStringExt(data: Buffer, offset: number) {
-    const length = bufferTo16Int(data, offset);
+    const length = data.readInt16BE(offset);
     const end = offset + 2 + length;
     return { str: data.toString("utf8", end - length, end), offset: end };
 }
 
 function decodeLargeTupleExt(data: Buffer, offset: number) {
-    const arity = bufferTo32Int(data, offset);
+    const arity = data.readInt32BE(offset);
     return decodeTuple(data, offset + 4, arity);
 }
 
 function decodeSmallTupleExt(data: Buffer, offset: number) {
-    const arity = bufferTo8Int(data, offset);
+    const arity = data.readInt8(offset);
     return decodeTuple(data, offset + 1, arity);
 }
 
-function decodeTuple(data: Buffer, offset: number, arity: number, elements: Term[] = []) {
+function decodeTuple(data: Buffer, offset: number, arity: number, elements: [...Term[]] = []) {
     if (arity === elements.length) {
         return { tuple: elements, offset };
     }
@@ -262,7 +260,7 @@ function decodeTuple(data: Buffer, offset: number, arity: number, elements: Term
 }
 
 function decodeListExt(data: Buffer, offset: number) {
-    const arity = bufferTo32Int(data, offset);
+    const arity = data.readInt32BE(offset);
     return decodeList(data, offset + 4, arity);
 }
 
@@ -285,28 +283,11 @@ function decodeExportExt(data: Buffer, offset: number): { export: [string, strin
     return { export: [module.atom, fun.atom, arity.integer], offset: arity.offset };
 }
 
-function bufferTo8Int(data: Buffer, offset: number) {
-    return data[offset];
-}
-
-function bufferTo16Int(data: Buffer, offset: number) {
-    return data[offset] << 8 | data[offset + 1];
-}
-
-function bufferTo32Int(data: Buffer, offset: number) {
-    return data[offset] << 24 | data[offset + 1] << 16 | data[offset + 2] << 8 | data[offset + 3];
-}
-
-function bufferToFloat(data: Buffer, offset: number) {
-    return data[offset] << 56 | data[offset + 1] << 48 |data[offset + 2] << 40 | data[offset + 3] << 32 |
-        data[offset + 4] << 24 | data[offset + 5] << 16 | data[offset + 6] << 8 | data[offset + 7];
-}
-
 function toTerm(type: "atom", content: string): Atom;
 function toTerm(type: "integer", content: number): Integer;
 function toTerm(type: "float", content: number): Float;
 function toTerm(type: "string", content: string): String;
-function toTerm<T extends Term[]>(type: "tuple", content: Term[]): Tuple<T>;
+function toTerm<T extends [...Term[]]>(type: "tuple", content: [...Term[]]): Tuple<T>;
 function toTerm<T extends Term[]>(type: "list", content: Term[]): List<T>;
 function toTerm(type: "export", content: [string, string, number]): Export;
 function toTerm(type: ErlangType, content: ErlangContent) {
@@ -327,23 +308,24 @@ function toTerm(type: ErlangType, content: ErlangContent) {
             const exportContent = content as [string, string, number];
             return { type, content, toString: () => `fun ${exportContent[0]}:${exportContent[1]}/${exportContent[2]}` };
         default:
-            break;
+            return { type, content, toString: () => content };
     }
-    return { type, content };
 }
 
-export function erlangRequest(module: string, fun: string, arity: number, ...args: Term[]): ErlangRequest {
+function erlangRequest(module: string, fun: string, ...args: Term[]) {
     const term = toTerm<[String, Export, List<Term[]>]>("tuple", [
         toTerm("string", randomUUID()),
-        toTerm("export", [module, fun, arity]),
+        toTerm("export", [module, fun, args.length]),
         toTerm("list", args)
     ]);
-    return {
+    const erlangRequest: ErlangRequest = {
         ref: function(this: ErlangRequest) {
             return this.content[0].content;
         },
         ...term
     };
+    return erlangRequest;
 }
 
+export const toErlangRequest = erlangRequest;
 export const toErlangTerm = toTerm;

@@ -19,3 +19,4 @@ function platformSpecific<T>(option: { windows?: T, linux?: T }) {
 }
 
 export const DGAP_BIN_EXEC = normalize(`${DGAP_BIN}/${platformSpecific({ windows: "dgap.cmd", linux: "dgap" })}`);
+export const PUBLIC_HTML_GRAPH = normalize(`${ROOT}/public/html/graph.html`);

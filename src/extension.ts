@@ -1,8 +1,12 @@
-import * as vscode from 'vscode';
-import { createCommand } from './command';
+import { ExtensionContext, commands } from 'vscode';
+import Console from './console';
 
-export function activate(extensionContext: vscode.ExtensionContext) {
-	createCommand(extensionContext);
+export function activate(context: ExtensionContext) {
+	const console = Console(context);
+	const consoleDisposable = commands.registerCommand("dgap.console", () => {
+		console.start();
+	});
+	context.subscriptions.push(consoleDisposable);
 }
 
 export function deactivate() {
