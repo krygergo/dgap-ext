@@ -48,7 +48,7 @@ At the root of the open folder/workspace in vscode there must exist a dgap.json 
     }
 
 ![Imgur](https://i.imgur.com/wooExVW.png)
-<div align="right">An image of how such a configuration might resemble like.</div>
+<div align="right">An image of how such a configuration might resemble</div>
 
 ### Example
 
