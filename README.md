@@ -71,4 +71,10 @@ Running consecutive commands in the command palette
 Yields the graph simulation
 
 ![Imgur](https://i.imgur.com/E6NAM62.png)
+
 The orange-colored dots, each marked with an ID label, represent individual vertices in the graph. Links between these vertices are visualized by white edges. These edges can be clicked to remove the link between the vertices. A removed link is visualized by the edge turning red.
+
+The right panel contains three different information types:
+- message - lists messages sent between vertices in the graph
+- result - lists the returned result when/if a vertex finish its execution
+- log - lists logs from the bif log function
