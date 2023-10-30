@@ -2,7 +2,7 @@ import { platform } from "os";
 import { normalize } from "path";
 
 const PLATFORM = platform();
-const ROOT = __dirname.slice(0, -4);
+const ROOT = __dirname.slice(0, -8);
 
 const DGAP = normalize(`${ROOT}/dgap`);
 const DGAP_BIN = normalize(`${DGAP}/bin`);

@@ -1,9 +1,11 @@
-import { Integer, String, List, Tuple, toErlangRequest, toErlangTerm } from "../erlangExtTermFormat";
-import { Service } from "./service";
+import { Integer, String, List, Tuple, toErlangRequest, toErlangTerm } from "../util/erlangExtTermFormat";
+import { ErlangService } from "./erlang";
 
-type Topology = List<Tuple<[Integer, List<Integer[]> | String]>[]>;
+export type TopologyService = ReturnType<typeof newTopologyService>;
 
-function fromTopology(topology: Topology): [number, number[]][] {
+export type Topology = List<Tuple<[Integer, List<Integer[]> | String]>[]>;
+
+export function fromTopology(topology: Topology): [number, number[]][] {
     return topology.content.map(vertex => {
         const [vertexId, vertexEdges] = vertex.content;
         const id = vertexId.content;
@@ -14,36 +16,24 @@ function fromTopology(topology: Topology): [number, number[]][] {
     });
 }
 
-interface TopologyService {
-    complete(from: number, to: number): Promise<Topology>;
-    random(from: number, to: number, alpha: number): Promise<Topology>;
-    ring(from: number, to: number): Promise<Topology>;
-}
-
-export default function(service: Service): TopologyService {
+export function newTopologyService(erlangService: ErlangService) {
     return {
-        complete: async (from, to) => {
-            const response = await service.call(toErlangRequest("topology", "random", 
+        complete: async function(from: number, to: number) {
+            const response = await erlangService.call(toErlangRequest("topology", "random", 
                 toErlangTerm("tuple", [toErlangTerm("integer", from), toErlangTerm("integer", to)]),
                 toErlangTerm("float", 1.0)));
             return response.content[1] as Topology;
         },
-        random: async (from, to, alpha) => {
-            const response = await service.call(toErlangRequest("topology", "random", 
+        random: async function(from: number, to: number, alpha: number) {
+            const response = await erlangService.call(toErlangRequest("topology", "random", 
                 toErlangTerm("tuple", [toErlangTerm("integer", from), toErlangTerm("integer", to)]),
                 toErlangTerm("float", alpha)));
             return response.content[1] as Topology;
         },
-        ring: async (from, to) => {
-            const response = await service.call(toErlangRequest("topology", "ring", 
+        ring: async function(from: number, to: number) {
+            const response = await erlangService.call(toErlangRequest("topology", "ring", 
                 toErlangTerm("tuple", [toErlangTerm("integer", from), toErlangTerm("integer", to)])));
             return response.content[1] as Topology;
         }
     };
 }
-
-export {
-    Topology,
-    fromTopology,
-    TopologyService
-};

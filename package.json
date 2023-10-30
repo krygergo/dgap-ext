@@ -3,6 +3,8 @@
   "displayName": "dgap",
   "description": "Distributed Graph Algorithm Playground",
   "version": "0.0.1",
+  "publisher": "krsch18@student.sdu.dk",
+  "repository": "https://github.com/krygergo/dgap-vsc-ext",
   "engines": {
     "vscode": "^1.80.0"
   },
@@ -14,8 +16,29 @@
   "contributes": {
     "commands": [
       {
-        "command": "dgap.console",
-        "title": "DGAP: Console"
+        "command": "dgap.start",
+        "description": "Starts the erlang application",
+        "title": "DGAP: Start"
+      },
+      {
+        "command": "dgap.stop",
+        "description": "Stops the erlang application",
+        "title": "DGAP: Stop"
+      },
+      {
+        "command": "dgap.compile",
+        "description": "Compiles an algorithm, provided by the compile property read from the dgap.json file",
+        "title": "DGAP: Compile"
+      },
+      {
+        "command": "dgap.simulate",
+        "description": "Simulates a graph algorithm, provided by the simulate property read from the dgap.json file",
+        "title": "DGAP: Simulate"
+      },
+      {
+        "command": "dgap.observer",
+        "decsription": "Starts and connects the erlang observer module to the erlang application",
+        "title": "DGAP: Observer"
       }
     ]
   },
@@ -25,6 +48,10 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts"
+  },
+  "dependencies": {
+    "graphology": "^0.25.4",
+    "sigma": "^3.0.0-alpha3"
   },
   "devDependencies": {
     "@types/glob": "^8.1.0",
@@ -37,9 +64,7 @@
     "@vscode/test-electron": "^2.3.2",
     "eslint": "^8.41.0",
     "glob": "^8.1.0",
-    "graphology": "^0.25.4",
     "mocha": "^10.2.0",
-    "sigma": "^3.0.0-alpha3",
     "typescript": "^5.1.3"
   }
 }

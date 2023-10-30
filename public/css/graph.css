@@ -74,6 +74,7 @@ body {
     font-weight: bold;
     cursor: pointer;
     color: var(--vscode-titleBar-inactiveForeground);
+    user-select: none;
 }
 
 .read-header span.active {

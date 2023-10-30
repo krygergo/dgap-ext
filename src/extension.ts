@@ -1,12 +1,10 @@
-import { ExtensionContext, commands } from 'vscode';
-import Console from './console';
+import { ExtensionContext } from 'vscode';
+import { newApplication } from './application';
+import { setContext } from './context';
 
 export function activate(context: ExtensionContext) {
-	const console = Console(context);
-	const consoleDisposable = commands.registerCommand("dgap.console", () => {
-		console.start();
-	});
-	context.subscriptions.push(consoleDisposable);
+	setContext(context);
+	newApplication().activate();
 }
 
 export function deactivate() {

@@ -1,14 +1,12 @@
-import { Atom, Tuple, toErlangRequest, toErlangTerm } from "../erlangExtTermFormat";
-import Service from "./service";
+import { Atom, Tuple, toErlangRequest, toErlangTerm } from "../util/erlangExtTermFormat";
+import { ErlangService } from "./erlang";
 
-interface AlgorithmService {
-    compile(file: string): Promise<string>;
-}
+export type AlgorithmService = ReturnType<typeof newAlgorithmService>;
 
-export default function(service: ReturnType<typeof Service>): AlgorithmService {
+export function newAlgorithmService(erlangService: ErlangService) {
     return {
-        compile: async (file: string) => {
-            const response = await service.call(toErlangRequest("algorithm", "compile", toErlangTerm("string", file)));
+        compile: async function(file: string) {
+            const response = await erlangService.call(toErlangRequest("algorithm", "compile", toErlangTerm("string", file)));
             if (response.content[1].content === "ok") {
                 return "ok";
             }
@@ -17,7 +15,3 @@ export default function(service: ReturnType<typeof Service>): AlgorithmService {
         }
     };
 }
-
-export {
-    AlgorithmService
-};

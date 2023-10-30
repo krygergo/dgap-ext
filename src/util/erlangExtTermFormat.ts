@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 
 enum Tag {
     NewFloatExt = 70,
+    NewPidExt = 88,
     SmallIntegerExt = 97,
     IntegerExt = 98,
     NilExt = 106,
@@ -16,8 +17,8 @@ enum Tag {
     Version = 131,
 }
 
-type ErlangType = "atom" | "integer" | "float" | "string" | "tuple" | "list" | "export";
-type ErlangContent = string | number | Term[] | [string, string, number];
+type ErlangType = "atom" | "integer" | "float" | "string" | "tuple" | "list" | "export" | "pid";
+type ErlangContent = string | number | Term[] | [string, string, number] | [string, number, number, number];
 
 type ErlangDataType<T extends ErlangType, C extends ErlangContent> = {
     type: T,
@@ -32,7 +33,8 @@ export type String = ErlangDataType<"string", string>;
 export type Tuple<T extends [...Term[]]> = ErlangDataType<"tuple", T>;
 export type List<T extends Term[]> = ErlangDataType<"list", T>;
 export type Export = ErlangDataType<"export", [string, string, number]>;
-export type Term = Atom | Integer | Float | String | Tuple<[...Term[]]> | List<Term[]> | Export;
+export type Pid = ErlangDataType<"pid", [string, number, number, number]>;
+export type Term = Atom | Integer | Float | String | Tuple<[...Term[]]> | List<Term[]> | Export | Pid;
 
 export type ErlangRequest = Tuple<[String, Export, List<Term[]>]> & { ref: () => string };
 
@@ -59,6 +61,8 @@ function encodeErlangData(data: Term, buffer: number[] = []): number[] {
             return encodeList(data.content, buffer);
         case "export":
             return encodeExport(data.content, buffer);
+        case "pid":
+            return enocdePid(data.content, buffer);
     }
 }
 
@@ -159,6 +163,11 @@ function encodeExport([module, fun, arity]: [string, string, number], buffer: nu
     return buffer.concat(encodeAtom(module), encodeAtom(fun), encodeInteger(arity));
 }
 
+function enocdePid([node, id, serial, creation]: [string, number, number, number], buffer: number[]) {
+    buffer.push(Tag.NewPidExt);
+    return buffer.concat(encodeAtom(node), encodeInteger(id), encodeInteger(serial), encodeInteger(creation));
+}
+
 export function decode(data: Buffer) {
     if (data[0] !== Tag.Version) {
         throw new Error(`Unknown tag version: ${data[0]}`);
@@ -202,6 +211,11 @@ function decodeErlangData(data: Buffer, offset: number): { term: Term; offset: n
         case Tag.ExportExt:
             const exportExt = decodeExportExt(data, offset);
             return { term: toTerm("export", exportExt.export), offset: exportExt.offset };
+        case Tag.NewPidExt:
+            const pidExt = decodeNewPidExt(data, offset);
+            return { term: toTerm("pid", pidExt.pid), offset: pidExt.offset };
+        case Tag.NilExt:
+            return { term: toTerm("list", []), offset: offset };
         default:
             throw new Error(`Unable to decode tag: ${data[offset - 1]}`);
     }
@@ -283,6 +297,14 @@ function decodeExportExt(data: Buffer, offset: number): { export: [string, strin
     return { export: [module.atom, fun.atom, arity.integer], offset: arity.offset };
 }
 
+function decodeNewPidExt(data: Buffer, offset: number): { pid: [string, number, number, number], offset: number } {
+    const node = decodeErlangData(data, offset);
+    const id = decodeIntegerExt(data, node.offset);
+    const serial = decodeIntegerExt(data, id.offset);
+    const creation = decodeIntegerExt(data, serial.offset);
+    return { pid: [node.term.toString(), id.integer, serial.integer, creation.integer], offset: creation.offset };
+}
+
 function toTerm(type: "atom", content: string): Atom;
 function toTerm(type: "integer", content: number): Integer;
 function toTerm(type: "float", content: number): Float;
@@ -290,6 +312,7 @@ function toTerm(type: "string", content: string): String;
 function toTerm<T extends [...Term[]]>(type: "tuple", content: [...Term[]]): Tuple<T>;
 function toTerm<T extends Term[]>(type: "list", content: Term[]): List<T>;
 function toTerm(type: "export", content: [string, string, number]): Export;
+function toTerm(type: "pid", content: [string, number, number, number]): Pid;
 function toTerm(type: ErlangType, content: ErlangContent) {
     switch (type) {
         case "atom":
@@ -307,6 +330,9 @@ function toTerm(type: ErlangType, content: ErlangContent) {
         case "export":
             const exportContent = content as [string, string, number];
             return { type, content, toString: () => `fun ${exportContent[0]}:${exportContent[1]}/${exportContent[2]}` };
+        case "pid":
+            const pidContent = content as [string, number, number, number];
+            return { type, content, toString: () => `<${pidContent[1]}.${pidContent[2]}.${pidContent[3]}>` };
         default:
             return { type, content, toString: () => content };
     }

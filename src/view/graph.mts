@@ -1,6 +1,5 @@
 import S from "sigma";
 import G from "graphology";
-import { ExtensionMessage, WebviewMessage } from "./graph.js";
 import { SigmaEdgeEventPayload } from "sigma/sigma.js";
 
 type Topology = [number, number[]][];
@@ -26,12 +25,15 @@ const vscode = acquireVsCodeApi();
 const sigmaContainer = document.getElementById("sigma-container") as HTMLElement;
 const graph = new Graphology();
 const sigma = new Sigma(graph, sigmaContainer, {
-    enableEdgeClickEvents: true
+    enableEdgeClickEvents: true,
+    labelColor: {
+        color: "orange"
+    }
 });
 
 window.addEventListener("message", graphWebview());
 
-function postMessage<T>(message: WebviewMessage<T>) {
+function postMessage(message: any) {
     vscode.postMessage(message);
 }
 
@@ -39,12 +41,12 @@ function graphWebview() {
     const vertices: Vertices = {};
     const edges: Edges = {};
     sigma.addListener("clickEdge", onEdgeClick(edges));
-    return (message: MessageEvent<ExtensionMessage<unknown>>) => {
+    return (message: MessageEvent<any>) => {
         messageDataHandler(vertices, edges, message.data);
     };
 }
 
-function messageDataHandler(vertices: Vertices, edges: Edges, { type, data }: ExtensionMessage<unknown>) {
+function messageDataHandler(vertices: Vertices, edges: Edges, { type, data }: any) {
     switch (type) {
         case "topology":
             return topologyHandler(vertices, edges, data as Topology);
@@ -93,7 +95,7 @@ function topologyHandler(vertices: Vertices, edges: Edges, topology: Topology) {
         const angle = (2 * Math.PI * index) / entries.length;
         const x = Math.cos(angle);
         const y = Math.sin(angle);
-        graph.addNode(id, { label: id, x, y, size: 6, color: "blue", leabelColor: "blue" });
+        graph.addNode(id, { label: id, x, y, size: 6, color: "orange" });
         vertex.edges
             .filter(edge => graph.hasNode(edge))
             .filter(edge => !graph.hasEdge(id, edge))
@@ -101,7 +103,7 @@ function topologyHandler(vertices: Vertices, edges: Edges, topology: Topology) {
                 const active = true;
                 const source = id;
                 const target = edge;
-                const geid = graph.addEdge(id, edge, { size: 2 });
+                const geid = graph.addEdge(id, edge, { size: 3 });
                 edges[geid] = { active, source, target };
             });
     });
@@ -221,5 +223,3 @@ readToggle.addEventListener("click", event => {
     }
     sigma.refresh();
 });
-
-

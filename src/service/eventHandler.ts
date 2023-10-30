@@ -1,45 +1,33 @@
-import { ErlangResponse, toErlangRequest, toErlangTerm } from "../erlangExtTermFormat";
-import { Service, Ref } from "./service";
+import { toErlangRequest, toErlangTerm } from "../util/erlangExtTermFormat";
+import { ErlangService } from "./erlang";
 
-type AsyncRead = { ref: Ref, response: Promise<ErlangResponse> };
+export type EventHandlerService = ReturnType<typeof newEventHandlerService>;
 
-interface EventHandlerService {
-    readLog(id: number): AsyncRead;
-    readMessage(id: number): AsyncRead;
-    readResult(id: number): AsyncRead;
-    cancel(ref: Ref): void;
-}
-
-export default function(service: Service): EventHandlerService {
+export function newEventHandlerService(erlangService: ErlangService) {
     return {
-        readLog(id) {
+        readLog: function(id: number) {
             const request = toErlangRequest("event_handler", "read_log", toErlangTerm("integer", id));
             return {
                 ref: request.ref(),
-                response: service.call(request, "infinity")
+                response: erlangService.call(request, "infinity")
             };
         },
-        readMessage(id) {
+        readMessage: function(id: number) {
             const request = toErlangRequest("event_handler", "read_message", toErlangTerm("integer", id));
             return {
                 ref: request.ref(),
-                response: service.call(request, "infinity")
+                response: erlangService.call(request, "infinity")
             };
         },
-        readResult(id) {
+        readResult: function(id: number) {
             const request = toErlangRequest("event_handler", "read_result", toErlangTerm("integer", id));
             return {
                 ref: request.ref(),
-                response: service.call(request, "infinity")
+                response: erlangService.call(request, "infinity")
             };
         },
-        cancel(ref) {
-            service.cancel(ref);
+        cancel: function(ref: string) {
+            erlangService.cancel(ref);
         }
     };
 }
-
-export {
-    AsyncRead,
-    EventHandlerService
-};

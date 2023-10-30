@@ -1,5 +1,7 @@
 import { Socket } from "net";
-import { ErlangRequest, ErlangResponse, decode, encode } from "../erlangExtTermFormat";
+import { ErlangRequest, ErlangResponse, decode, encode } from "../util/erlangExtTermFormat";
+
+export type ErlangService = ReturnType<typeof newErlangService>;
 
 type Ref = string;
 type ResponsePromises = {
@@ -7,13 +9,7 @@ type ResponsePromises = {
     reject(reason?: any): void;
 };
 
-interface Service {
-    call: (erlangRequest: ErlangRequest, timeout?: number | "infinity") => Promise<ErlangResponse>;
-    cast: (erlangRequest: ErlangRequest) => boolean;
-    cancel: (ref: Ref) => void;
-}
-
-export default function (socket: Socket): Service {
+export function newErlangService(socket: Socket) {
     const promises: { [key: Ref]: ResponsePromises } = {};
     socket.on("data", (data: Buffer) => {
         const buffer: number[] = [];
@@ -44,8 +40,10 @@ export default function (socket: Socket): Service {
                 promises[erlangRequest.ref()] = { resolve, reject };
                 if (timeout !== "infinity") {
                     setTimeout(() => {
-                        reject(`Call timeout error`);
-                        delete promises[erlangRequest.ref()];
+                        if (erlangRequest.ref() in promises) {
+                            delete promises[erlangRequest.ref()];
+                            reject(`Call timeout error`);
+                        }
                     }, timeout);
                 }
             });
@@ -62,8 +60,3 @@ export default function (socket: Socket): Service {
         },
     };
 }
-
-export {
-    Service,
-    Ref
-};
