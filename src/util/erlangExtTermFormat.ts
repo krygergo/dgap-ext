@@ -1,4 +1,4 @@
-import { Buffer } from "buffer";
+import { Buffer, kMaxLength } from "buffer";
 import { randomUUID } from "crypto";
 
 enum Tag {
@@ -12,13 +12,14 @@ enum Tag {
     StringExt = 107,
     ListExt = 108,
     ExportExt = 113,
+    MapExt = 116,
     AtomUtf8Ext = 118,
     SmallAtomUtf8Ext = 119,
     Version = 131,
 }
 
-type ErlangType = "atom" | "integer" | "float" | "string" | "tuple" | "list" | "export" | "pid";
-type ErlangContent = string | number | Term[] | [string, string, number] | [string, number, number, number];
+type ErlangType = "atom" | "integer" | "float" | "string" | "tuple" | "list" | "export" | "pid" | "map";
+type ErlangContent = string | number | Term[] | [string, string, number] | [string, number, number, number] | [Term, Term][];
 
 type ErlangDataType<T extends ErlangType, C extends ErlangContent> = {
     type: T,
@@ -34,7 +35,8 @@ export type Tuple<T extends [...Term[]]> = ErlangDataType<"tuple", T>;
 export type List<T extends Term[]> = ErlangDataType<"list", T>;
 export type Export = ErlangDataType<"export", [string, string, number]>;
 export type Pid = ErlangDataType<"pid", [string, number, number, number]>;
-export type Term = Atom | Integer | Float | String | Tuple<[...Term[]]> | List<Term[]> | Export | Pid;
+export type Map = ErlangDataType<"map", [Term, Term][]>;
+export type Term = Atom | Integer | Float | String | Tuple<[...Term[]]> | List<Term[]> | Export | Pid | Map;
 
 export type ErlangRequest = Tuple<[String, Export, List<Term[]>]> & { ref: () => string };
 
@@ -62,7 +64,9 @@ function encodeErlangData(data: Term, buffer: number[] = []): number[] {
         case "export":
             return encodeExport(data.content, buffer);
         case "pid":
-            return enocdePid(data.content, buffer);
+            return encodePid(data.content, buffer);
+        case "map":
+            return encodeMap(data.content, buffer);
     }
 }
 
@@ -163,9 +167,17 @@ function encodeExport([module, fun, arity]: [string, string, number], buffer: nu
     return buffer.concat(encodeAtom(module), encodeAtom(fun), encodeInteger(arity));
 }
 
-function enocdePid([node, id, serial, creation]: [string, number, number, number], buffer: number[]) {
+function encodePid([node, id, serial, creation]: [string, number, number, number], buffer: number[]) {
     buffer.push(Tag.NewPidExt);
     return buffer.concat(encodeAtom(node), encodeInteger(id), encodeInteger(serial), encodeInteger(creation));
+}
+
+function encodeMap(map: [Term, Term][], buffer: number[] = []) {
+    buffer.push(Tag.MapExt);
+    const bytes = [map.length >> 24, map.length >> 16 & 0xFF, map.length >> 8 & 0xFF, map.length & 0xFF];
+    bytes.forEach(byte => buffer.push(byte));
+    const subEncode = map.map(([key, value]: [Term, Term]) => [...encodeErlangData(key), ...encodeErlangData(value)]);
+    return buffer.concat(...subEncode);
 }
 
 export function decode(data: Buffer) {
@@ -214,6 +226,9 @@ function decodeErlangData(data: Buffer, offset: number): { term: Term; offset: n
         case Tag.NewPidExt:
             const pidExt = decodeNewPidExt(data, offset);
             return { term: toTerm("pid", pidExt.pid), offset: pidExt.offset };
+        case Tag.MapExt:
+            const mapExt = decodeMapExt(data, offset);
+            return { term: toTerm("map", mapExt.map), offset: mapExt.offset };
         case Tag.NilExt:
             return { term: toTerm("list", []), offset: offset };
         default:
@@ -305,6 +320,21 @@ function decodeNewPidExt(data: Buffer, offset: number): { pid: [string, number, 
     return { pid: [node.term.toString(), id.integer, serial.integer, creation.integer], offset: creation.offset };
 }
 
+function decodeMapExt(data: Buffer, offset: number) {
+    const arity = data.readInt32BE(offset);
+    return decodeMap(data, offset + 4, arity);
+}
+
+function decodeMap(data: Buffer, offset: number, arity: number, elements: [Term, Term][] = []) {
+    if (arity === elements.length) {
+        return { map: elements, offset: offset };
+    }
+    const decodeKey = decodeErlangData(data, offset);
+    const decodeValue = decodeErlangData(data, decodeKey.offset);
+    elements.push([decodeKey.term, decodeValue.term]);
+    return decodeMap(data, decodeValue.offset, arity, elements);
+}
+
 function toTerm(type: "atom", content: string): Atom;
 function toTerm(type: "integer", content: number): Integer;
 function toTerm(type: "float", content: number): Float;
@@ -313,6 +343,7 @@ function toTerm<T extends [...Term[]]>(type: "tuple", content: [...Term[]]): Tup
 function toTerm<T extends Term[]>(type: "list", content: Term[]): List<T>;
 function toTerm(type: "export", content: [string, string, number]): Export;
 function toTerm(type: "pid", content: [string, number, number, number]): Pid;
+function toTerm(type: "map", content: [Term, Term][]): Map;
 function toTerm(type: ErlangType, content: ErlangContent) {
     switch (type) {
         case "atom":
@@ -322,7 +353,7 @@ function toTerm(type: ErlangType, content: ErlangContent) {
         case "float":
             return { type, content, toString: () => content.toString() };
         case "string":
-            return { type, content, toString: () => content };
+            return { type, content, toString: () => `\"${content}\"` };
         case "tuple":
             return { type, content, toString: () => `{${(content as Term[]).map(term => `${term.toString()}, `).join("").slice(0, -2)}}` };
         case "list":
@@ -333,6 +364,8 @@ function toTerm(type: ErlangType, content: ErlangContent) {
         case "pid":
             const pidContent = content as [string, number, number, number];
             return { type, content, toString: () => `<${pidContent[1]}.${pidContent[2]}.${pidContent[3]}>` };
+        case "map":
+            return { type, content, toString: () => `#{${(content as [Term, Term][]).map(([key, value]: [Term, Term]) => `${key.toString()} => ${value.toString()}, `).join("").slice(0, -2)}}` };
         default:
             return { type, content, toString: () => content };
     }

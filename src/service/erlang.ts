@@ -34,7 +34,11 @@ export function newErlangService(socket: Socket) {
     return {
         call: function(erlangRequest: ErlangRequest, timeout: number | "infinity" = 5000) {
             return new Promise<ErlangResponse>((resolve, reject) => {
-                if (!socket.write(encode(erlangRequest))) {
+                const encodedErlangRequest = encode(erlangRequest);
+                if (encodedErlangRequest.length >= 1048576) {
+                    return reject("Call request must not exceed 1 MB");
+                }
+                if (!socket.write(encodedErlangRequest)) {
                     return reject("Call write error");
                 }
                 promises[erlangRequest.ref()] = { resolve, reject };
