@@ -12,24 +12,23 @@ type ResponsePromises = {
 export function newErlangService(socket: Socket) {
     const promises: { [key: Ref]: ResponsePromises } = {};
     socket.on("data", (data: Buffer) => {
-        const buffer: number[] = [];
-        const { buffers } = data.reduce((acc, byte) => {
-            if (byte === 131 && acc.buffer.length) {
-                acc.buffer = [];
-                acc.buffers.push(acc.buffer);
-            }
-            acc.buffer.push(byte);
-            return acc;
-        }, { buffer, buffers: [buffer] });
-        buffers.forEach(data => {
-            const response = decode(Buffer.from(data)) as ErlangResponse;
+        let length = data.readInt32BE();
+        let offset = 4;
+        while (length <= data.length - offset) {
+            const temp = data.subarray(offset, length + offset);
+            const response = decode(Buffer.from(temp)) as ErlangResponse;
             const ref = response.content[0].content;
             if (ref in promises) {
                 const { resolve } = promises[ref];
                 resolve(response);
                 delete promises[ref];
             }
-        });
+            offset += length;
+            if (offset < data.length) {
+                length = data.readInt32BE(offset);
+                offset += 4;
+            }
+        }
     });
     return {
         call: function(erlangRequest: ErlangRequest, timeout: number | "infinity" = 5000) {

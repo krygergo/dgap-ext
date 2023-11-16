@@ -44,7 +44,8 @@ export type ErlangResponse = Tuple<[String, Term]> & { ref: () => string };
 
 export function encode(data: Term) {
     const buffer = encodeErlangData(data, [Tag.Version]);
-    return Buffer.from(buffer);
+    const length = buffer.length;
+    return Buffer.from([length >> 24, (length >> 16) & 0xFF, (length >> 8) & 0xFF, length & 0xFF,...buffer]);
 }
 
 function encodeErlangData(data: Term, buffer: number[] = []): number[] {
